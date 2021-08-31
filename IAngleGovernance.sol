@@ -30,7 +30,7 @@ interface IStableMaster{
     /// @param settlementContract Settlement contract that will be used to close everyone's positions and to let
     /// users, SLPs and HAs redeem if not all a portion of their claim
     /// @dev Since this function has the ability to transfer the contract's funds to another contract, it is
-    /// only be accessible to the governor
+    /// only accessible to the governor
     /// @dev Before calling this function, governance should make sure that all the collateral lent to strategies
     /// has been withdrawn
     function revokeCollateral(IPoolManager poolManager, ICollateralSettler settlementContract) external;
@@ -126,8 +126,8 @@ interface IPerpetualManager{
     function setHAFees(uint64[] memory _xHAFees, uint64[] memory _yHAFees, uint8 deposit) external;
 
     /// @notice Sets the target and limit proportions of collateral from users that can be insured by HAs
-    /// @param _targetHACoverage Proportion of collateral from users (in stablecoin vaue) that HAs should cover
-    /// @param _limitHACoverage Proportion of collateral from users (in stablecoin vaue) above which HAs can 
+    /// @param _targetHACoverage Proportion of collateral from users (in stablecoin value) that HAs should cover
+    /// @param _limitHACoverage Proportion of collateral from users (in stablecoin value) above which HAs can 
     /// see their perpetuals cashed out
     function setTargetAndLimitHACoverage(uint64 _targetHACoverage, uint64 _limitHACoverage) external;
 

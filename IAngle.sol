@@ -52,12 +52,6 @@ interface IStrategy{
 
     /// @return Weighted apr of all lenders. sum(nav * apr)/totalNav
     function estimatedAPR() external view returns (uint256);
-
-    /// @notice Provides an indication of whether this strategy is currently "active"
-    /// in that it is managing an active position, or will manage a position in
-    /// the future.
-    /// @return True if the strategy is actively managing a position.
-    function isActive() external view returns (bool);
 }
 
 /// @notice Interface for `StableMaster`, the contract handling all the collateral types accepted for a given stablecoin
