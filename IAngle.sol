@@ -1,10 +1,19 @@
 
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GNU GPLv3
 pragma solidity >=0.8.2;
 
-/// @notice Interface of the contract managing perpetuals
+// ====================================== IAngle.sol ===============================
+// This file contains the interfaces for the main contracts of Angle protocol. 
+// Some of these contracts need to be deployed several times across the protocol with different 
+// initializations. We only leave in the following interfaces the user-facing functions
+// that anyone can call without having a role. There are some view functions and some
+// state-changing functions.
+
+
+/// @notice Interface for the `PoolManager` contract handling the collateral of the protocol
+/// @dev There is one such contract per stablecoin/collateral pair
 interface IPoolManager{
-    /// @return  Estimated Annual Percentage Rate for SLPs based on lending to other protocols
+    /// @return apr Estimated Annual Percentage Rate for SLPs based on lending to other protocols
     function estimatedAPR() external view returns (uint256 apr);
 
     /// @return The amount of the underlying collateral that the contract currently owns
@@ -14,12 +23,28 @@ interface IPoolManager{
     function getTotalAsset() external view returns (uint256);
 }
 
-/// @notice Interface of the contract managing startegies
+/// @notice Interface for the `Strategy` contract managing a strategy
+/// @dev Each `PoolManager` has different `Strategy` contracts associated to it
+/// @dev The role of a `Strategy` contract is to interact with different lending platforms or more
+/// generally yield generators (called `lenders`) to get some yield on the collateral controlled
+/// @dev This yield is then distributed to the corresponding `PoolManager`
 interface IStrategy{
+    /// @notice Struct representing a lender contract interacting with Angle protocol
+    struct LendStatus {
+        // Name of the lending contracy
+        string name;
+        // Current total assets managed by the lender
+        uint256 assets;
+        // APR of the lender
+        uint256 rate;
+        // Address of the lender
+        address add;
+    }
+
     /// @return Returns the status of all lenders attached the strategy
     function lendStatuses() external view returns (LendStatus[] memory);
 
-    /// @return Total assets managed by the strategy
+    /// @return nav Total assets managed by the strategy
     function estimatedTotalAssets() external view returns (uint256 nav);
 
     /// @return Number of lending platforms
@@ -27,31 +52,33 @@ interface IStrategy{
 
     /// @return Weighted apr of all lenders. sum(nav * apr)/totalNav
     function estimatedAPR() external view returns (uint256);
+
+    /// @notice Provides an indication of whether this strategy is currently "active"
+    /// in that it is managing an active position, or will manage a position in
+    /// the future.
+    /// @return True if the strategy is actively managing a position.
+    function isActive() external view returns (bool);
 }
 
-/// @notice Interface for `IStableMaster` handling all the collateral types accepted for a given stablecoin
+/// @notice Interface for `StableMaster`, the contract handling all the collateral types accepted for a given stablecoin
 interface IStableMaster{
 
-    struct LendStatus {
-        string name;
-        uint256 assets;
-        uint256 rate;
-        address add;
-    }
-    /// @notice Lets a user add collateral to the system to mint stablecoins
+    /// @notice Lets a user send collateral to the system to mint stablecoins
     /// @param amount Amount of collateral sent
     /// @param user Address of the contract or the person to give the minted tokens to
     /// @param poolManager Address of the `PoolManager` of the required collateral
     /// @param minStableAmount Minimum amount of stablecoins the user wants to get with this transaction
+    /// @dev The `poolManager` refers to the collateral that the user wants to send
+    /// @dev `minStableAmount` serves as a slippage protection for users
     function mint(uint256 amount, address user, IPoolManager poolManager, uint256 minStableAmount) external;
 
-    /// @notice Updates variables to take the burn of agTokens (stablecoins) into account, computes transaction
-    /// fees and gives collateral from the `PoolManager` in exchange for that
+    /// @notice Lets a user burn agTokens (stablecoins) and receive the collateral specified by the `poolManager``
+    /// in exchange
     /// @param amount Amount of stable asset burnt
     /// @param burner Address from which the agTokens will be burnt
-    /// @param dest Address where collateral is going to be
+    /// @param dest Address where collateral is going to be sent
     /// @param poolManager Collateral type requested by the user burning
-    /// @param minCollatAmount Minimum
+    /// @param minCollatAmount Minimum amount of collateral that the user wants to get with this transaction
     function burn(
         uint256 amount,
         address burner,
@@ -59,29 +86,28 @@ interface IStableMaster{
         IPoolManager poolManager,
         uint256 minCollatAmount) external;
 
-    /// @notice Lets a SLP enter the protocol by adding collateral to the system in exchange of sanTokens
+    /// @notice Lets a SLP enter the protocol by sending collateral to the system in exchange of sanTokens
     /// @param user Address of the SLP to send sanTokens to
     /// @param amount Amount of collateral sent
-    /// @param poolManager Address of the `PoolManager` of the required collateral
+    /// @param poolManager Address of the `PoolManager` of the required collateral: the corresponding collateral
+    /// type is the one that is going to be sent by the user
     function deposit(uint256 amount, address user, IPoolManager poolManager) external;
 
-    /// @notice Updates variables to account for the burn of sanTokens by a SLP and gives the corresponding
-    /// collateral back in exchange
+    /// @notice Lets a SLP burn of sanTokens and receive the corresponding collateral back in exchange at the
+    /// current exchange rate between sanTokens and collateral
     /// @param amount Amount of sanTokens burnt by the SLP
     /// @param burner Address that will burn its sanTokens
     /// @param dest Address that will receive the collateral
     /// @param poolManager Address of the `PoolManager` of the required collateral
     function withdraw(uint256 amount, address burner, address dest, IPoolManager poolManager) external;
 
-    /// @return _stocksUsers All stablecoins currently assigned to the pool of the caller
-    function getStocksUsers() external view returns (uint256 _stocksUsers);
-
     /// @return Collateral ratio for this stablecoin
     function getCollateralRatio() external view returns (uint256);
 }
 
 
-/// @notice Interface of the contract managing perpetuals
+/// @notice Interface for the contract managing perpetuals: there is one such contract per collateral/stablecoin
+/// pair in the protocol
 interface IPerpetualManager{
     /// @notice Lets a HA join the protocol and create a perpetual
     /// @param owner Address of the future owner of the perpetual
@@ -89,7 +115,8 @@ interface IPerpetualManager{
     /// @param committedAmount Amount of collateral covered by the HA
     /// @param maxOracleRate Maximum oracle value that the HA wants to see stored in the perpetual
     /// @return perpetualID The ID of the perpetual opened by this HA
-    function createPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate) external;
+    /// @dev `maxOracleRate` serves as a slippage protectionfor the HA
+    function createPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate) external returns (uint256 perpetualID);
 
     /// @notice Lets a HA cash out a perpetual owned or controlled for the stablecoin/collateral pair associated
     /// to this `PerpetualManager` contract
@@ -124,7 +151,7 @@ interface IPerpetualManager{
 
     /// @notice Allows to check the amount of reward tokens earned by a perpetual
     /// @param perpetualID ID of the perpetual to check
-    /// @return The earned tokens by the perpetual not claimed
+    /// @return The earned tokens by the perpetual that have not been claimed yet
     function earned(uint256 perpetualID) external view returns (uint256);
 
     /// @notice Allows a perpetual owner to withdraw rewards
@@ -186,6 +213,7 @@ interface IPerpetualManager{
     function safeTransferFrom(address from, address to, uint256 perpetualID, bytes memory _data) external;
 }
 
+/// @notice Interface for the staking contract of the Angle protocol
 interface IStakingRewards {
     /// @dev Used instead of having a public variable to respect the ERC20 standard
     /// @return Total supply
@@ -197,12 +225,12 @@ interface IStakingRewards {
 
     /// @return Current timestamp if a reward is being distributed and the end of the staking
     /// period if staking is done
-    function lastTimeRewardApplicable() public view returns (uint256);
+    function lastTimeRewardApplicable() external view returns (uint256);
 
-    /// @notice Returns how much a given account earned rewards
+    /// @notice Returns how much unclaimed rewards an account has
     /// @param account Address for which the request is made
     /// @return How much a given account earned rewards
-    function earned(address account) public view returns (uint256);
+    function earned(address account) external view returns (uint256);
 
     /// @notice Lets someone stake a given amount of `stakingTokens`
     /// @param amount Amount of ERC20 staking token that the `msg.sender` wants to stake
@@ -228,6 +256,8 @@ interface IStakingRewards {
 /// @dev This contract is used to create and handle the stablecoins of Angle protocol
 /// @dev Only the `StableMaster` contract can mint or burn agTokens
 /// @dev It is still possible for any address to burn its agTokens without redeeming collateral in exchange
+/// @dev `AgTokens` are classical ERC-20 tokens, so it is still possible to `approve` an address, `transfer` or
+/// `transferFrom` the tokens
 interface IAgToken {
     /// @notice Burns `amount` of agToken on behalf of another account without redeeming collateral back
     /// @param account Account to burn on behalf of
@@ -247,6 +277,8 @@ interface IAgToken {
 /// @dev There is one `SanToken` contract per pair stablecoin/collateral
 /// @dev Only the `StableMaster` contract can mint or burn sanTokens
 /// @dev It is still possible for any address to burn its sanTokens without redeeming collateral in exchange
+/// @dev Like `AgTokens`, sanTokens are classical ERC-20 tokens, so it is still possible to `approve` an address, `transfer` or
+/// `transferFrom` the tokens
 interface SanToken {
     /// @notice Destroys `amount` token for the caller without giving collateral back
     /// @param amount Amount to burn
@@ -254,73 +286,10 @@ interface SanToken {
 }
 
 
-/// @notice Interface for the `BondingCurve` contract
-/// @dev 
-interface IBondingCurve {
-    /// @notice Lets `msg.sender` buy tokens (ANGLE tokens normally) against an allowed token (a stablecoin normally)
-    /// @param _agToken Reference to the agToken used, that is the stablecoin used to buy the token associated to this
-    /// bonding curve
-    /// @param targetSoldTokenQuantity Target quantity of tokens to buy
-    function buySoldToken(IAgToken _agToken, uint256 targetSoldTokenQuantity) external;
-
-    /// @dev More generally than the expression used, the value of the price is:
-    /// `startPrice/(1-tokensSoldInTx/tokensToSellInTotal)^power` with `power = 2`
-    /// @dev The precision of this function is not that important as it is a view function anyone can query
-    /// @notice Returns the current price of the token (expressed in reference)
-    function getCurrentPrice() external view returns (uint256);
-
-    /// @return The quantity of governance tokens that are still to be sold
-    function getQuantityLeftToSell() external view returns (uint256);
-
-    /// @param targetQuantity Quantity of ANGLE tokens to buy
-    /// @dev This is an utility function that can be queried before buying tokens
-    /// @return The amount to pay for the desired amount of ANGLE to buy
-    function computePriceFromQuantity(uint256 targetQuantity) external view returns (uint256);
-}
-
-/// @title ICollateralSettler
-/// @author Angle Core Team
-/// @notice Interface for the collateral settlement contracts
-interface ICollateralSettler {
-
-    /// @notice Allows a user to claim collateral for a `dest` address by sending agTokens and gov tokens (optional)
-    /// @param dest Address of the user to claim collateral for
-    /// @param amountAgToken Amount of agTokens sent
-    /// @param amountGovToken Amount of governance sent
-    /// @dev The more gov tokens a user sent, the more preferably it ends up being treated during the redeem period
-    function claimUser(address dest, uint256 amountAgToken, uint256 amountGovToken) external;
-
-    /// @notice Allows a HA to claim collateral by sending a `perpetualID` and gov tokens (optional)
-    /// @param perpetualID Perpetual owned by the HA
-    /// @param amountGovToken Amount of governance sent
-    /// @dev The contract automatically recognizes the beneficiary of the perpetual
-    function claimHA(uint256 perpetualID, uint256 amountGovToken) external;
-
-    /// @notice Allows a SLP to claim collateral for an address `dest` by sending sanTokens and gov tokens (optional)
-    /// @param dest Address to claim collateral for
-    /// @param amountSanToken Amount of sanTokens sent
-    /// @param amountGovToken Amount of governance tokens sent
-    function claimSLP(address dest, uint256 amountSanToken, uint256 amountGovToken) external;
-
-    /// @notice Computes the base amount each category of claim will get after the claim period has ended
-    /// @dev This function can only be called once when claim period is over
-    /// @dev It is at the level of this function that the waterfall between the different
-    /// categories of stakeholders and of claims is executed
-    function setAmountToRedistributeEach() external;
-
-    /// @notice Lets a user or a LP redeem its corresponding share of collateral
-    /// @param user Address of the user to redeem collateral to
-    /// @dev This function can only be called after the `setAmountToRedistributeEach` function has been called
-    /// @dev The entry point to redeem is the same for users, HAs and SLPs
-    function redeemCollateral(address user) external;
-}
-
 /// @notice Interface for the `Core` contract
 interface ICore {
     /// @return `_governorList` List of all the governor addresses of the protocol
-    /// @dev This getter is used by `StableMaster` contracts deploying new collateral types
-    /// and initializing them with correct references
-    function governorList() external view returns (address[] memory) 
+    function governorList() external view returns (address[] memory);
 }
 
 /// @notice Interface for Angle's oracle contracts reading oracle rates from both UniswapV3 and Chainlink,
@@ -370,4 +339,65 @@ interface IOracle {
     /// @return The lowest quote amount from the quote amount in in-currency
     /// @dev The rate returned is expressed with base `BASE` (and not the base of the out-currency)
     function readQuoteLower(uint256 quoteAmount) external view returns (uint256);
+}
+
+/// @notice Interface for the `BondingCurve` contract
+/// @dev This contract allows people to buy ANGLE governance tokens using the protocol's stablecoins
+/// @dev It is with high certainty not going to be distributed directly at launch
+interface IBondingCurve {
+    /// @notice Lets `msg.sender` buy tokens (ANGLE tokens normally) against an allowed token (a stablecoin normally)
+    /// @param _agToken Reference to the agToken used, that is the stablecoin used to buy the token associated to this
+    /// bonding curve
+    /// @param targetSoldTokenQuantity Target quantity of tokens to buy
+    function buySoldToken(IAgToken _agToken, uint256 targetSoldTokenQuantity) external;
+
+    /// @dev More generally than the expression used, the value of the price is:
+    /// `startPrice/(1-tokensSoldInTx/tokensToSellInTotal)^power` with `power = 2`
+    /// @dev The precision of this function is not that important as it is a view function anyone can query
+    /// @notice Returns the current price of the token (expressed in reference)
+    function getCurrentPrice() external view returns (uint256);
+
+    /// @return The quantity of governance tokens that are still to be sold
+    function getQuantityLeftToSell() external view returns (uint256);
+
+    /// @param targetQuantity Quantity of ANGLE tokens to buy
+    /// @dev This is an utility function that can be queried before buying tokens
+    /// @return The amount to pay for the desired amount of ANGLE to buy
+    function computePriceFromQuantity(uint256 targetQuantity) external view returns (uint256);
+}
+
+/// @title ICollateralSettler
+/// @notice Interface for the collateral settlement contracts that are used when a collateral is getting revoked
+interface ICollateralSettler {
+
+    /// @notice Allows a user to claim collateral for a `dest` address by sending agTokens and gov tokens (optional)
+    /// @param dest Address of the user to claim collateral for
+    /// @param amountAgToken Amount of agTokens sent
+    /// @param amountGovToken Amount of governance sent
+    /// @dev The more gov tokens a user sends, the more preferably it ends up being treated during the redeem period
+    function claimUser(address dest, uint256 amountAgToken, uint256 amountGovToken) external;
+
+    /// @notice Allows a HA to claim collateral by sending a `perpetualID` and gov tokens (optional)
+    /// @param perpetualID Perpetual owned by the HA
+    /// @param amountGovToken Amount of governance sent
+    /// @dev The contract automatically recognizes the beneficiary of the perpetual
+    function claimHA(uint256 perpetualID, uint256 amountGovToken) external;
+
+    /// @notice Allows a SLP to claim collateral for an address `dest` by sending sanTokens and gov tokens (optional)
+    /// @param dest Address to claim collateral for
+    /// @param amountSanToken Amount of sanTokens sent
+    /// @param amountGovToken Amount of governance tokens sent
+    function claimSLP(address dest, uint256 amountSanToken, uint256 amountGovToken) external;
+
+    /// @notice Computes the base amount each category of claim will get after the claim period has ended
+    /// @dev This function can only be called once when claim period is over
+    /// @dev It is at the level of this function that the waterfall between the different
+    /// categories of stakeholders and of claims is executed
+    function setAmountToRedistributeEach() external;
+
+    /// @notice Lets a user or a LP redeem its corresponding share of collateral
+    /// @param user Address of the user to redeem collateral to
+    /// @dev This function can only be called after the `setAmountToRedistributeEach` function has been called
+    /// @dev The entry point to redeem is the same for users, HAs and SLPs
+    function redeemCollateral(address user) external;
 }

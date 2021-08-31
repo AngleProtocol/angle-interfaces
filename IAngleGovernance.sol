@@ -1,16 +1,210 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GNU GPLv3
 pragma solidity >=0.8.2;
 
-interface IAgToken {}
+// ============================ IAngleGovernance.sol ===============================
+// This file contains the interfaces for the main contracts of Angle protocol with just
+// the functions governance can play on to change parameters or take the deployment
+// of new contracts into account. There are some functions that can be called only by the 
+// governor addresses of the protocol and others that can also be called by
 
-interface IOracle {}
+/// @notice Interface for the governor functions of the `StableMaster` contract handling all the collateral
+/// types accepted for a given stablecoin
+interface IStableMaster{
 
-interface IERC20 {}
+    /// @notice Deploys a new collateral by creating the correct references in the corresponding contracts
+    /// @param poolManager Contract managing and storing this collateral for this stablecoin
+    /// @param perpetualManager Contract managing HA perpetuals for this stablecoin
+    /// @param oracle Reference to the oracle that will give the price of the collateral with respect to the stablecoin
+    /// @param sanToken Reference to the sanTokens associated to the collateral
+    function deployCollateral(
+        IPoolManager poolManager,
+        IPerpetualManager perpetualManager,
+        IFeeManager feeManager,
+        IOracle oracle,
+        ISanToken sanToken
+    ) external;
 
-interface IStakingRewards {}
+    /// @notice Removes a collateral from the list of accepted collateral types and pauses all actions associated
+    /// to this collateral
+    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol
+    /// @param settlementContract Settlement contract that will be used to close everyone's positions and to let
+    /// users, SLPs and HAs redeem if not all a portion of their claim
+    /// @dev Since this function has the ability to transfer the contract's funds to another contract, it is
+    /// only be accessible to the governor
+    /// @dev Before calling this function, governance should make sure that all the collateral lent to strategies
+    /// has been withdrawn
+    function revokeCollateral(IPoolManager poolManager, ICollateralSettler settlementContract) external;
 
-interface ISanToken {}
+    /// @notice Pauses an agent's actions within this contract for a given collateral type for this stablecoin
+    /// @param agent Bytes representing the agent (`SLP` or `STABLE`) and the collateral type that is going to
+    /// be paused. To get the `bytes32` from a string, we use in Solidity a `keccak256` function
+    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol and
+    /// for which `agent` needs to be paused
+    /// @dev If agent is `STABLE`, it is going to be impossible for users to mint stablecoins using collateral or to burn
+    /// their stablecoins
+    /// @dev If agent is `SLP`, it is going to be impossible for SLPs to deposit collateral and receive
+    /// sanTokens in exchange, or to withdraw collateral from their sanTokens
+    function pause(bytes32 agent, IPoolManager poolManager) external;
 
+    /// @notice Unpauses an agent's action for a given collateral type for this stablecoin
+    /// @param agent Agent (`SLP` or `STABLE`) to unpause the action of
+    /// @param poolManager Reference to the associated `PoolManager`
+    function unpause(bytes32 agent, IPoolManager poolManager) external;
+
+    /// @notice Updates the `stocksUsers` for a given pair of collateral
+    /// @param amount Amount of `stocksUsers` to transfer from a pool to another
+    /// @param poolManagerUp Reference to `PoolManager` for which `stocksUsers` needs to increase
+    /// @param poolManagerDown Reference to `PoolManager` for which `stocksUsers` needs to decrease
+    /// `stocksUsers` is the amount of collateral from users in stablecoin value for this collateral type
+    function rebalanceStocksUsers(uint256 amount, IPoolManager poolManagerUp, IPoolManager poolManagerDown) external;
+
+    /// @notice Propagates the change of oracle for one collateral to all the contracts which need to have
+    /// the correct oracle reference
+    /// @param _oracle New oracle contract for the pair collateral/stablecoin
+    /// @param poolManager Reference to the `PoolManager` contract associated to the collateral
+    /// @dev Since this function could be used to manipulate oracle prices, it can only be called by a governor
+    /// address
+    function setOracle(IOracle _oracle, IPoolManager poolManager) external;
+
+    /// @notice Changes the parameter to cap the number of stablecoins you can issue using one
+    /// collateral type
+    /// @param _capOnStableMinted New cap on the amount of stablecoins you can issue using one 
+    /// collateral type
+    /// @param poolManager Reference to the `PoolManager` contract associated to the collateral
+    function setCapOnStableAndMaxInterests(uint256 _capOnStableMinted, uint256 _maxInterestsDistributed, IPoolManager poolManager) external;
+
+    /// @notice Sets a new `FeeManager` contract and removes the old one which becomes useless
+    /// @param newFeeManager New `FeeManager` contract
+    /// @param oldFeeManager Old `FeeManager` contract
+    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol
+    /// and associated to the `FeeManager` to update
+    function setFeeManager(address newFeeManager, address oldFeeManager, IPoolManager poolManager) external;
+
+    /// @notice Sets the proportion of fees from burn/mint of users and the proportion
+    /// of lending interests going to SLPs
+    /// @param _feesForSLPs New proportion of mint/burn fees going to SLPs
+    /// @param _interestsForSLPs New proportion of interests from lending going to SLPs
+    function setIncentivesForSLPs( uint64 _feesForSLPs, uint64 _interestsForSLPs, IPoolManager poolManager) external;
+
+    /// @notice Sets the x array (ie ratios between amount covered by HAs and amount to cover)
+    /// and the y array (ie values of fees at thresholds) used to compute mint and burn fees for users
+    /// @param poolManager Reference to the `PoolManager` handling the collateral
+    /// @param _xFee Thresholds of coverage ratios
+    /// @param _yFee Values of the fees at thresholds
+    /// @param _mint Whether mint fees or burn fees should be updated
+    function setUserFees(IPoolManager poolManager, uint64[] memory _xFee, uint64[] memory _yFee, uint8 _mint) external;
+}
+
+/// @notice Interface for the governance functions of the contract managing perpetuals
+interface IPerpetualManager{
+    /// @notice Sets `lockTime` that is the minimum amount of time HAs before which HAs can remove collateral
+    /// from the protocol
+    /// @param _lockTime New `lockTime` parameter
+    function setLockTime(uint256 _lockTime) external;
+
+    /// @notice Changes the maximum leverage authorized (commit/margin) and the maintenance margin under which
+    /// perpetuals can be liquidated
+    /// @param _maxLeverage New value of the maximum leverage allowed
+    /// @param _maintenanceMargin The new maintenance margin
+    function setBoundsPerpetual(uint64 _maxLeverage, uint64 _maintenanceMargin) external;
+
+    /// @notice Changes the `rewardsDistribution` associated to this contract
+    /// @param _rewardsDistribution Address of the new rewards distributor contract
+    function setNewRewardsDistributor(address _rewardsDistribution) external;
+
+    /// @notice Sets the conditions and specifies the duration of the reward distribution
+    /// @param _rewardsDuration Duration for the rewards for this contract
+    /// @param _rewardsDistribution Address which will give the reward tokens
+    function setRewardDistribution(uint256 _rewardsDuration, address _rewardsDistribution) external;
+
+    /// @notice Sets `xHAFees` that is the thresholds of values of the ratio between the what's covered
+    /// divided by what's to cover by HAs at which fees will change as well as
+    /// `yHAFees` that is the value of the deposit or withdraw fees at threshold
+    /// @param _xHAFees Array of the x-axis value for the fees (deposit or withdraw)
+    /// @param _yHAFees Array of the y-axis value for the fees (deposit or withdraw)
+    /// @param deposit Whether deposit or withdraw fees should be updated
+    function setHAFees(uint64[] memory _xHAFees, uint64[] memory _yHAFees, uint8 deposit) external;
+
+    /// @notice Sets the target and limit proportions of collateral from users that can be insured by HAs
+    /// @param _targetHACoverage Proportion of collateral from users (in stablecoin vaue) that HAs should cover
+    /// @param _limitHACoverage Proportion of collateral from users (in stablecoin vaue) above which HAs can 
+    /// see their perpetuals cashed out
+    function setTargetAndLimitHACoverage(uint64 _targetHACoverage, uint64 _limitHACoverage) external;
+
+    /// @notice Sets the proportion of fees going to the keepers when liquidating a HA perpetual
+    /// @param _keeperFeesRatio Proportion to keepers
+    /// @dev This proportion should be inferior to `BASE_PARAMS`
+    function setKeeperFeesRatio(uint64 _keeperFeesRatio) external;
+
+    /// @notice Sets the maximum amounts going to the keepers when cashing out perpetuals
+    /// because too much was covered by HAs or liquidating a perpetual
+    /// @param _keeperFeesLiquidationCap Maximum reward going to the keeper liquidating a perpetual
+    /// @param _keeperFeesCashOutCap Maximum reward going to the keeper forcing the cash out of an ensemble
+    /// of perpetuals
+    function setKeeperFeesCap(uint256 _keeperFeesLiquidationCap, uint256 _keeperFeesCashOutCap) external;
+
+    /// @notice Sets the x-array (ie thresholds) for `FeeManager` when cashing out perpetuals and the y-array that is the
+    /// value of the proportions of the fees going to keepers cashing out perpetuals
+    /// @param _xKeeperFeesCashOut Thresholds for cash out fees
+    /// @param _yKeeperFeesCashOut Value of the fees at the different threshold values specified in `xKeeperFeesCashOut`
+    function setKeeperFeesCashOut(uint64[] memory _xKeeperFeesCashOut, uint64[] memory _yKeeperFeesCashOut) external;
+
+    /// @notice Supports recovering LP Rewards from other systems
+    /// @param tokenAddress Address of the token to transfer
+    /// @param to Address to give tokens to
+    /// @param tokenAmount Amount of tokens to transfer
+    function recoverERC20(address tokenAddress,address to, uint256 tokenAmount) external;
+
+    /// @notice Pauses the `getReward` method as well as the functions allowing to create, modify or cash-out perpetuals
+    /// @dev After calling this function, it is going to be impossible for HAs to interact with their perpetuals
+    /// or claim their rewards on it
+    function pause() external;
+
+    /// @notice Unpauses HAs functions
+    function unpause() external;
+}
+
+/// @notice Interface for the governance functions of the contract managing the collateral of a given
+/// collateral/stablecoin pair
+interface IPoolManager{
+    /// @notice Allows to recover any ERC20 token, including the token handled by this contract, and to send it
+    /// to a contract
+    /// @param tokenAddress Address of the token to recover
+    /// @param to Address of the contract to send collateral to
+    /// @param amountToRecover Amount of collateral to transfer
+    /// @dev This function can obviously just be called by governance since it has the ability to withdraw funds
+    /// from the protocol
+    function recoverERC20(address tokenAddress, address to, uint256 amountToRecover) external;
+
+    /// @notice Adds a strategy to the `PoolManager`
+    /// @param strategy The address of the strategy to add
+    /// @param _debtRatio The share of the total assets that the strategy has access to
+    function addStrategy(address strategy, uint256 _debtRatio) external;
+
+    /// @notice Modifies the funds a strategy has access to
+    /// @param strategy The address of the Strategy
+    /// @param _debtRatio The share of the total assets that the strategy has access to
+    /// @dev The update has to be such that the `debtRatio` does not exceeds the 100% threshold
+    /// as this `PoolManager` cannot lend collateral that it doesn't not own.
+    function updateStrategyDebtRatio(address strategy, uint256 _debtRatio) external;
+
+    /// @notice Triggers an emergency exit for a strategy and then harvests it to fetch all the funds
+    /// @param strategy The address of the `Strategy`
+    function setStrategyEmergencyExit(address strategy) external;
+
+    /// @notice Revokes a strategy
+    /// @param strategy The address of the strategy to revoke
+    /// @dev This should only be called after the following happened in order: the `strategy.debtRatio` has been set to 0,
+    /// `harvest` has been called enough times to recover all capital gain/losses.
+    function revokeStrategy(address strategy) external;
+
+    /// @notice Withdraws a given amount from a strategy, may not recover all funds (see angle-core implementation)
+    /// @param strategy The address of the strategy
+    /// @param amount The amount to withdraw
+    function withdrawFromStrategy(IStrategy strategy, uint256 amount) external;
+}
+
+/// @notice Interface for the governance functions of a `Strategy` contract
 interface IStrategy{
     /// @notice Used to change `rewards`.
     /// @param _rewards The address to use for pulling rewards.
@@ -48,196 +242,9 @@ interface IStrategy{
     function sweep(address _token, address to) external;
 }
 
-/// @notice Interface for `IStableMaster` handling all the collateral types accepted for a given stablecoin
-interface IStableMaster{
 
-    /// @notice Deploys a new collateral by creating the correct references in the corresponding contracts
-    /// @param poolManager Contract managing and storing this collateral for this stablecoin
-    /// @param perpetualManager Contract managing HA perpetuals for this stablecoin
-    /// @param oracle Reference to the oracle that will give the price of the collateral with respect to the stablecoin
-    /// @param sanToken Reference to the sanTokens associated to the collateral
-    function deployCollateral(
-        IPoolManager poolManager,
-        IPerpetualManager perpetualManager,
-        IFeeManager feeManager,
-        IOracle oracle,
-        ISanToken sanToken
-    ) external;
-
-    /// @notice Removes a collateral from the list of accepted collateral types and pauses all actions associated
-    /// to this collateral
-    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol
-    /// @param settlementContract Settlement contract that will be used to close everyone's positions and to let
-    /// users, SLPs and HAs redeem if not all a portion of their claim
-    /// @dev Since this function has the ability to transfer the contract's funds to another contract, it should
-    /// only be accessible to the governor
-    /// @dev Before calling this function, governance should make sure that all the collateral lent to strategies
-    /// has been withdrawn
-    function revokeCollateral(IPoolManager poolManager, ICollateralSettler settlementContract) external;
-
-    /// @notice Pauses an agent's actions within this contract for a given collateral type for this stablecoin
-    /// @param agent Bytes representing the agent (`SLP` or `STABLE`) and the collateral type that is going to
-    /// be paused. To get the `bytes32` from a string, we use in Solidity a `keccak256` function
-    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol and
-    /// for which `agent` needs to be paused
-    /// @dev If agent is `STABLE`, it is going to be impossible for users to mint stablecoins using collateral or to burn
-    /// their stablecoins
-    /// @dev If agent is `SLP`, it is going to be impossible for SLPs to deposit collateral and receive
-    /// sanTokens in exchange, or to withdraw collateral from their sanTokens
-    function pause(bytes32 agent, IPoolManager poolManager) external;
-
-    /// @notice Unpauses an agent's action for a given collateral type for this stablecoin
-    /// @param agent Agent (`SLP` or `STABLE`) to unpause the action of
-    /// @param poolManager Reference to the associated `PoolManager`
-    function unpause(bytes32 agent, IPoolManager poolManager) external;
-
-    /// @notice Updates the `stocksUsers` for a given pair of collateral
-    /// @param amount Amount of `stocksUsers` to transfer from a pool to another
-    /// @param poolManagerUp Reference to `PoolManager` for which `stocksUsers` needs to increase
-    /// @param poolManagerDown Reference to `PoolManager` for which `stocksUsers` needs to decrease
-    function rebalanceStocksUsers(uint256 amount, IPoolManager poolManagerUp, IPoolManager poolManagerDown) external;
-
-    /// @notice Propagates the change of oracle for one collateral to all the contracts which need to have
-    /// the correct oracle reference
-    /// @param _oracle New oracle contract for the pair collateral/stablecoin
-    /// @param poolManager Reference to the `PoolManager` contract associated to the collateral
-    function setOracle(IOracle _oracle, IPoolManager poolManager) external;
-
-    /// @notice Changes the parameter to cap the number of stablecoins you can issue using one
-    /// collateral type
-    /// @param _capOnStableMinted New value
-    /// @param poolManager Reference to the `PoolManager` contract associated to the collateral
-    function setCapOnStableAndMaxInterests(uint256 _capOnStableMinted, uint256 _maxInterestsDistributed, IPoolManager poolManager) external;
-
-    /// @notice Sets a new `FeeManager` contract and removes the old one which becomes useless
-    /// @param newFeeManager New `FeeManager` contract
-    /// @param oldFeeManager Old `FeeManager` contract
-    /// @param poolManager Reference to the contract managing this collateral for this stablecoin in the protocol
-    /// and associated to the `FeeManager` to update
-    function setFeeManager(address newFeeManager, address oldFeeManager, IPoolManager poolManager) external;
-
-    /// @notice Sets the proportion of fees from burn/mint of users and the proportion
-    /// of lending interests going to SLPs
-    /// @param _feesForSLPs New proportion of mint/burn fees going to SLPs
-    /// @param _interestsForSLPs New proportion of interests from lending going to SLPs
-    function setIncentivesForSLPs( uint64 _feesForSLPs, uint64 _interestsForSLPs, IPoolManager poolManager) external;
-
-    /// @notice Sets the x array (ie ratios between amount covered by HAs and amount to cover)
-    /// and the y array (ie values of fees at thresholds) used to compute mint and burn fees for users
-    /// @param poolManager Reference to the `PoolManager` handling the collateral
-    /// @param _xFee Thresholds of coverage ratios
-    /// @param _yFee Values of the fees at thresholds
-    /// @param _mint Whether mint fees or burn fees should be updated
-    function setUserFees(IPoolManager poolManager, uint64[] memory _xFee, uint64[] memory _yFee, uint8 _mint) external;
-}
-
-/// @notice Interface of the contract managing perpetuals
-interface IPerpetualManager{
-    /// @notice Sets `lockTime` that is the minimum amount of time HAs have to stay within the protocol
-    /// @param _lockTime New `lockTime` parameter
-    function setLockTime(uint256 _lockTime) external;
-
-    /// @notice Changes the maximum leverage authorized (commit/margin) and the maintenance margin under which
-    /// perpetuals can be liquidated
-    /// @param _maxLeverage New value of the maximum leverage allowed
-    /// @param _maintenanceMargin The new maintenance margin
-    function setBoundsPerpetual(uint64 _maxLeverage, uint64 _maintenanceMargin) external;
-
-    /// @notice Changes the `rewardsDistribution` associated to this contract
-    /// @param _rewardsDistribution Address of the new rewards distributor contract
-    function setNewRewardsDistributor(address _rewardsDistribution) external;
-
-    /// @notice Sets the conditions and specifies the duration of the reward distribution
-    /// @param _rewardsDuration Duration for the rewards for this contract
-    /// @param _rewardsDistribution Address which will give the reward tokens
-    function setRewardDistribution(uint256 _rewardsDuration, address _rewardsDistribution) external;
-
-    /// @notice Sets `xHAFees` that is the thresholds of values of the ratio between the what's covered
-    /// divided by what's to cover by HAs at which fees will change as well as
-    /// `yHAFees` that is the value of the deposit or withdraw fees at threshold
-    /// @param _xHAFees Array of the x-axis value for the fees (deposit or withdraw)
-    /// @param _yHAFees Array of the y-axis value for the fees (deposit or withdraw)
-    /// @param deposit Whether deposit or withdraw fees should be updated
-    function setHAFees(uint64[] memory _xHAFees, uint64[] memory _yHAFees, uint8 deposit) external;
-
-    /// @notice Sets the target and limit proportions of collateral from users that can be insured by HAs
-    /// @param _targetHACoverage Proportion of collateral from users that HAs should cover
-    /// @param _limitHACoverage Proportion of collateral from users above which HAs can see their perpetuals
-    /// cashed out
-    function setTargetAndLimitHACoverage(uint64 _targetHACoverage, uint64 _limitHACoverage) external;
-
-    /// @notice Sets the proportion of fees going to the keepers when liquidating a HA perpetual
-    /// @param _keeperFeesRatio Proportion to keepers
-    /// @dev This proportion should be inferior to `BASE_PARAMS`
-    function setKeeperFeesRatio(uint64 _keeperFeesRatio) external;
-
-    /// @notice Sets the maximum amounts going to the keepers when cashing out perpetuals
-    /// because too much was covered by HAs or liquidating a perpetual
-    /// @param _keeperFeesLiquidationCap Maximum reward going to the keeper liquidating a perpetual
-    /// @param _keeperFeesCashOutCap Maximum reward going to the keeper forcing the cash out of an ensemble
-    /// of perpetuals
-    function setKeeperFeesCap(uint256 _keeperFeesLiquidationCap, uint256 _keeperFeesCashOutCap) external;
-
-    /// @notice Sets the x-array (ie thresholds) for `FeeManager` when cashing out perpetuals and the y-array that is the
-    /// value of the proportions of the fees going to keepers cashing out perpetuals
-    /// @param _xKeeperFeesCashOut Thresholds for cash out fees
-    /// @param _yKeeperFeesCashOut Value of the fees at the different threshold values specified in `xKeeperFeesCashOut`
-    function setKeeperFeesCashOut(uint64[] memory _xKeeperFeesCashOut, uint64[] memory _yKeeperFeesCashOut) external;
-
-        /// @notice Supports recovering LP Rewards from other systems
-    /// @param tokenAddress Address of the token to transfer
-    /// @param to Address to give tokens to
-    /// @param tokenAmount Amount of tokens to transfer
-    function recoverERC20(address tokenAddress,address to, uint256 tokenAmount) external;
-
-    /// @notice Pauses the `getReward` method as well as the functions allowing to create, modify or cash-out perpetuals
-    /// @dev After calling this function, it is going to be impossible for HAs to interact with their perpetuals
-    /// or claim their rewards on it
-    function pause() external;
-
-    /// @notice Unpauses HAs functions
-    function unpause() external;
-}
-
-/// @notice Interface of the contract managing perpetuals
-interface IPoolManager{
-    /// @notice Allows to recover any ERC20 token, including the token handled by this contract, and to send it
-    /// to a contract
-    /// @param tokenAddress Address of the token to recover
-    /// @param to Address of the contract to send collateral to
-    /// @param amountToRecover Amount of collateral to transfer
-    function recoverERC20(address tokenAddress, address to, uint256 amountToRecover) external;
-
-    /// @notice Adds a strategy to the `PoolManager`
-    /// @param strategy The address of the strategy to add
-    /// @param _debtRatio The share of the total assets that the strategy has access to
-    function addStrategy(address strategy, uint256 _debtRatio) external;
-
-    /// @notice Modifies the funds a strategy has access to
-    /// @param strategy The address of the Strategy
-    /// @param _debtRatio The share of the total assets that the strategy has access to
-    /// @dev The update has to be such that the `debtRatio` does not exceeds the 100% threshold
-    /// as this `PoolManager` cannot lend collateral that it doesn't not own.
-    function updateStrategyDebtRatio(address strategy, uint256 _debtRatio) external;
-
-    /// @notice Triggers an emergency exit for a strategy and then harvests it to fetch all the funds
-    /// @param strategy The address of the `Strategy`
-    function setStrategyEmergencyExit(address strategy) external;
-
-    /// @notice Revokes a strategy
-    /// @param strategy The address of the strategy to revoke
-    /// @dev This should only be called after the following happened in order: the `strategy.debtRatio` has been set to 0,
-    /// `harvest` has been called enough times to recover all capital gain/losses.
-    function revokeStrategy(address strategy) external;
-
-    /// @notice Withdraws a given amount from a strategy, may not recover all funds (see angle-core implementation)
-    /// @param strategy The address of the strategy
-    /// @param amount The amount to withdraw
-    function withdrawFromStrategy(IStrategy strategy, uint256 amount) external;
-}
-
-
-/// @notice Interface for the `RewardsDistributor` contract
+/// @notice Interface for the `RewardsDistributor` contract: this contract is responsible for interacting with all the
+/// staking contracts and for distributing them the reward token (most often ANGLE) given to stakers
 interface IRewardsDistributor {
     /// @notice Sends tokens back to governance treasury or another address
     /// @param amount Amount of tokens to send back to treasury
@@ -300,7 +307,7 @@ interface IRewardsDistributor {
     function setDuration(uint256 _duration, IStakingRewards stakingContract) external;
 }
 
-/// @notice Interface for the `BondingCurve` contract
+/// @notice Interface for the governance functions of the `BondingCurve` contract
 /// @dev Bonding Curve used to buy governance tokens directly to the protocol
 interface IBondingCurve {
     /// @notice Transfers tokens from the bonding curve to another address
@@ -345,7 +352,7 @@ interface IBondingCurve {
     function unpause() external ;
 }
 
-/// @notice Interface for the collateral settlement contracts
+/// @notice Interface for the governance functions of collateral settlement contracts
 interface ICollateralSettler {
     /// @notice Changes the amount that can be redistributed with this contract
     /// @param newAmountToRedistribute New amount that can be given by this contract
@@ -378,7 +385,8 @@ interface ICollateralSettler {
 }
 
 
-/// @notice Interface for the `Core` contract
+/// @notice Interface for the `Core` contract of the protocol: this is the contract making sure that governance
+/// remains the same at the protocol level and that maintains the integrity of the protocol
 interface ICore {
     /// @notice Changes the `Core` contract of the protocol
     /// @param newCore Address of the new `Core` contract
@@ -435,7 +443,8 @@ interface ICore {
     function revokeGuardian() external;
 }
 
-/// @notice Interface for the `FeeManager` contract
+/// @notice Interface for the `FeeManager` contract: this is the contract that keepers should call to update the fees
+/// for users and HAs depending on the collateral ratio
 interface IFeeManager {
     /// @notice Sets the x(ie thresholds of collateral ratio) array / y(ie value of fees at threshold)-array
     /// for users minting, burning, for SLPs withdrawal slippage or for the slippage fee when updating
@@ -466,14 +475,12 @@ interface IOracleMulti{
     function increaseTWAPStore(uint16 newLengthStored) external;
 }
 
+interface IAgToken {}
 
-library AngleAddrsRinkeby {
-    ICore public constant core = ICore(address(0));
-    IBondingCurve public constant bondingCurve = IBondingCurve(address(0));
+interface IOracle {}
 
-    // There will be multiple contracts for the following interfaces
-    ICollateralSettler public constant collateralSettler = ICollateralSettler(address(0));
-    IFeeManager public constant feeManager = IFeeManager(address(0));
-    IOracleMulti public constant oracle = IOracleMulti(address(0));
+interface IERC20 {}
 
-}
+interface IStakingRewards {}
+
+interface ISanToken {}
