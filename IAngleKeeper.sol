@@ -1,29 +1,31 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GNU GPLv3
 pragma solidity >=0.8.2;
 
-interface IAgToken {}
+// ============================ IAngleKeeper.sol ===================================
+// This file contains the interfaces for the contracts of Angle protocol with just
+// the functions keepers can interact with. Anyone can be a keeper within Angle Protocol.
+// Keepers interact with functions that are expensive to compute at each protocol interaction
+// but that should still be called once in a while
 
-interface IOracle {}
 
-interface IStakingRewards {}
-
-/// @notice Interface for the `RewardsDistributor` contract
+/// @notice Interface for the keeper functions of `RewardsDistributor` contract
 interface IRewardsDistributor {
     /// @notice Sends governance token to the staking contract
     /// @param stakingContract Reference to the staking contract
+    /// @dev The keeper calling this function gets an incentive under the form of `ANGLE` tokens
+    /// or another reward token
     function drip(IStakingRewards stakingContract) external returns (uint256);
 }
 
 interface Strategy{
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
+    /// @dev Keepers do not get anything specific for calling this function. We expect 
+    /// SLPs to be calling this function since they will be able to profit directly from 
+    /// this call
+    /// @dev Governance could vote to give rewards in the future to keepers calling this 
+    /// function
     function harvest() external;
-
-    /// @notice Provides an indication of whether this strategy is currently "active"
-    /// in that it is managing an active position, or will manage a position in
-    /// the future.
-    /// @return True if the strategy is actively managing a position.
-    function isActive() external view returns (bool);
 
     /// @notice Provides a signal to the keeper that `harvest()` should be called. The
     /// keeper will provide the estimated gas cost that they would pay to call
@@ -38,21 +40,27 @@ interface Strategy{
     function harvestTrigger(uint256 callCostInWei) external view returns (bool);
 }
 
-/// @notice Interface of the contract managing perpetuals
+/// @notice Interface for the keeper functions of the contract managing perpetuals
 interface IPerpetualManager{
     /// @notice Allows an outside caller to liquidate perpetuals if their position is
     /// under the maintenance margin
     /// @param perpetualIDs ID of the targeted perpetuals
+    /// @dev Keepers calling this function get a fraction of the remaining cash out amount
+    /// of the perpetuals they liquidated
     function liquidatePerpetuals(uint256[] memory perpetualIDs) external;
 
     /// @notice Allows an outside caller to cash out a perpetual if too much of the collateral from
     /// users is covered by HAs
     /// @param perpetualIDs IDs of the targeted perpetuals
     /// @dev This function allows to make sure that the protocol will not have too much HAs for a long period of time
+    /// @dev Keepers calling this function get a portion of the fees that were paid by the perpetuals they cashed out
+    /// @dev Note that keepers are going to receive more fees if they put us in the correct target covered amount: if they
+    /// fail to cash out enough perpetuals, what they receive is going to be drastically smaller
     function forceCashOutPerpetuals(uint256[] memory perpetualIDs) external;
 }
 
-/// @notice Interface for the `FeeManager` contract
+/// @notice Interface for the `FeeManager` contract used to induce a dependency on collateral ratio for the users 
+/// minting/burning fees
 interface IFeeManager {
     /// @notice Updates the SLP and Users fees associated to the pair stablecoin/collateral in
     /// the `StableMaster` contract
@@ -82,3 +90,6 @@ interface IFeeManager {
     function updateHA() external;
 
 }
+
+
+interface IStakingRewards {}
