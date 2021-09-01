@@ -66,7 +66,7 @@ interface IStableMaster{
     /// @dev `minStableAmount` serves as a slippage protection for users
     function mint(uint256 amount, address user, IPoolManager poolManager, uint256 minStableAmount) external;
 
-    /// @notice Lets a user burn agTokens (stablecoins) and receive the collateral specified by the `poolManager``
+    /// @notice Lets a user burn agTokens (stablecoins) and receive the collateral specified by the `poolManager`
     /// in exchange
     /// @param amount Amount of stable asset burnt
     /// @param burner Address from which the agTokens will be burnt
