@@ -9,7 +9,6 @@ pragma solidity >=0.8.2;
 // that anyone can call without having a role. There are some view functions and some
 // state-changing functions.
 
-
 /// @notice Interface for the `PoolManager` contract handling the collateral of the protocol
 /// @dev There is one such contract per stablecoin/collateral pair
 interface IPoolManager{
@@ -108,16 +107,23 @@ interface IPerpetualManager{
     /// @param margin Amount of collateral brought by the HA
     /// @param committedAmount Amount of collateral covered by the HA
     /// @param maxOracleRate Maximum oracle value that the HA wants to see stored in the perpetual
+    /// @param minNetMargin Minimum net margin that the HA is willing to see stored in the perpetual
     /// @return perpetualID The ID of the perpetual opened by this HA
-    /// @dev `maxOracleRate` serves as a slippage protectionfor the HA
-    function createPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate) external returns (uint256 perpetualID);
+    /// @dev The `maxOracleRate` parameter serves as a protection against oracle manipulations for HAs opening perpetuals
+    /// @dev `minNetMargin` is a protection against too big variations in the fees for HAs
+    function createPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate, uint256 minNetMargin) external returns (uint256 perpetualID);
 
     /// @notice Lets a HA cash out a perpetual owned or controlled for the stablecoin/collateral pair associated
     /// to this `PerpetualManager` contract
     /// @param perpetualID ID of the perpetual to cash out
     /// @param to Address which will receive the proceeds from this perpetual
-    /// @param minOracleRate Minimum oracle value at which the HA wants to get executed
-    function cashOutPerpetual(uint256 perpetualID, address to, uint256 minOracleRate) external;
+    /// @param minCashOutAmount Minimum net cash out amount that the HA is willing to get for cashing out the
+    /// perpetual
+    /// @dev The HA gets the current amount of her position depending on the entry oracle value
+    /// and current oracle value minus some transaction fees computed on the committed amount
+    /// @dev The `minCashOutAmount` serves as a protection for HAs cashing out their perpetuals: it protects them both
+    /// from fees that would have become too high and from a too big decrease in oracle value
+    function cashOutPerpetual(uint256 perpetualID, address to, uint256 minCashOutAmount) external;
 
     /// @notice Lets a HA increase the `margin` in a perpetual she controls for this
     /// stablecoin/collateral pair
@@ -250,19 +256,24 @@ interface IStakingRewards {
 /// @dev This contract is used to create and handle the stablecoins of Angle protocol
 /// @dev Only the `StableMaster` contract can mint or burn agTokens
 /// @dev It is still possible for any address to burn its agTokens without redeeming collateral in exchange
-/// @dev `AgTokens` are classical ERC-20 tokens, so it is still possible to `approve` an address, `transfer` or
+/// @dev agTokens are classical ERC-20 tokens, so it is still possible to `approve` an address, `transfer` or
 /// `transferFrom` the tokens
 interface IAgToken {
     /// @notice Burns `amount` of agToken on behalf of another account without redeeming collateral back
     /// @param account Account to burn on behalf of
     /// @param amount Amount to burn
-    /// @dev This function is used in the `BondingCurve` where agTokens are burnt
-    /// and ANGLE tokens are given in exchange
-    function burnFromNoRedeem(address account, uint256 amount) external;
+    /// @param poolManager Reference to the `PoolManager` contract for which the `stocksUsers` will
+    /// need to be updated
+    /// @dev When calling this function, people should specify the `poolManager` for which they want to decrease
+    /// the `stocksUsers`: this a way for the protocol to maintain healthy accounting variables
+    /// @dev This function is for instance to be used by governance to burn the tokens accumulated by the `BondingCurve`
+    /// contract
+    function burnFromNoRedeem(address account, uint256 amount, address poolManager) external;
 
     /// @notice Destroys `amount` token from the caller without giving collateral back
     /// @param amount Amount to burn
-    function burnNoRedeem(uint256 amount) external;
+    /// @param poolManager Reference to the `PoolManager` contract for which the `stocksUsers` will need to be updated
+    function burnNoRedeem(uint256 amount, address poolManager) external;
 
 }
 
@@ -273,7 +284,7 @@ interface IAgToken {
 /// @dev It is still possible for any address to burn its sanTokens without redeeming collateral in exchange
 /// @dev Like `AgTokens`, sanTokens are classical ERC-20 tokens, so it is still possible to `approve` an address, `transfer` or
 /// `transferFrom` the tokens
-interface SanToken {
+interface ISanToken {
     /// @notice Destroys `amount` token for the caller without giving collateral back
     /// @param amount Amount to burn
     function burnNoRedeem(uint256 amount) external;
@@ -342,8 +353,9 @@ interface IBondingCurve {
     /// @notice Lets `msg.sender` buy tokens (ANGLE tokens normally) against an allowed token (a stablecoin normally)
     /// @param _agToken Reference to the agToken used, that is the stablecoin used to buy the token associated to this
     /// bonding curve
-    /// @param targetSoldTokenQuantity Target quantity of tokens to buy
-    function buySoldToken(IAgToken _agToken, uint256 targetSoldTokenQuantity) external;
+    /// @param maxAmountToPayInAgToken Maximum amount to pay in agTokens that the user is willing to pay to buy the
+    /// `targetSoldTokenQuantity`
+    function buySoldToken(IAgToken _agToken, uint256 targetSoldTokenQuantity, uint256 maxAmountToPayInAgToken) external;
 
     /// @dev More generally than the expression used, the value of the price is:
     /// `startPrice/(1-tokensSoldInTx/tokensToSellInTotal)^power` with `power = 2`
