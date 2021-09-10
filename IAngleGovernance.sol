@@ -100,7 +100,7 @@ interface IPerpetualManager{
     /// @notice Sets `lockTime` that is the minimum amount of time HAs before which HAs can remove collateral
     /// from the protocol
     /// @param _lockTime New `lockTime` parameter
-    function setLockTime(uint256 _lockTime) external;
+    function setLockTime(uint64 _lockTime) external;
 
     /// @notice Changes the maximum leverage authorized (commit/margin) and the maintenance margin under which
     /// perpetuals can be liquidated
