@@ -49,14 +49,15 @@ interface IPerpetualManager{
     /// of the perpetuals they liquidated
     function liquidatePerpetuals(uint256[] memory perpetualIDs) external;
 
-    /// @notice Allows an outside caller to cash out a perpetual if too much of the collateral from
-    /// users is covered by HAs
+    /// @notice Allows an outside caller to close perpetuals if too much of the collateral from
+    /// users is hedged by HAs
     /// @param perpetualIDs IDs of the targeted perpetuals
     /// @dev This function allows to make sure that the protocol will not have too much HAs for a long period of time
-    /// @dev Keepers calling this function get a portion of the fees that were paid by the perpetuals they cashed out
-    /// @dev Note that keepers are going to receive more fees if they put us in the correct target covered amount: if they
-    /// fail to cash out enough perpetuals, what they receive is going to be drastically smaller
-    function forceCashOutPerpetuals(uint256[] memory perpetualIDs) external;
+    /// @dev The call to the function above will revert if HAs cannot be cashed out
+    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
+    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
+    /// as keepers for the protocol
+    function forceClosePerpetuals(uint256[] memory perpetualIDs) external;
 }
 
 /// @notice Interface for the `FeeManager` contract used to induce a dependency on collateral ratio for the users 
@@ -78,7 +79,7 @@ interface IFeeManager {
 
     /// @notice Updates HA fees associated to the pair stablecoin/collateral in the `PerpetualManager` contract
     /// @dev This function updates:
-    ///     - The part of the fee taken from HAs when they create a perpetual or add collateral in it. This allows
+    ///     - The part of the fee taken from HAs when they open a perpetual or add collateral in it. This allows
     ///        governance to add penalties or bonuses in some occasions to HAs opening their perpetuals
     ///     - The part of the fee taken from the HA when they withdraw collateral from a perpetual. This allows
     ///       governance to add penalty or bonuses in some occasions to HAs closing their perpetuals

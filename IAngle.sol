@@ -105,25 +105,30 @@ interface IPerpetualManager{
     /// @notice Lets a HA join the protocol and create a perpetual
     /// @param owner Address of the future owner of the perpetual
     /// @param margin Amount of collateral brought by the HA
-    /// @param committedAmount Amount of collateral covered by the HA
+    /// @param committedAmount Amount of collateral hedged by the HA
     /// @param maxOracleRate Maximum oracle value that the HA wants to see stored in the perpetual
     /// @param minNetMargin Minimum net margin that the HA is willing to see stored in the perpetual
     /// @return perpetualID The ID of the perpetual opened by this HA
+    /// @dev The future owner of the perpetual cannot be the zero address
+    /// @dev It is possible to open a perpetual on behalf of someone else
     /// @dev The `maxOracleRate` parameter serves as a protection against oracle manipulations for HAs opening perpetuals
     /// @dev `minNetMargin` is a protection against too big variations in the fees for HAs
-    function createPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate, uint256 minNetMargin) external returns (uint256 perpetualID);
+    function openPerpetual(address owner, uint256 margin, uint256 committedAmount, uint256 maxOracleRate, uint256 minNetMargin) external returns (uint256 perpetualID);
 
-    /// @notice Lets a HA cash out a perpetual owned or controlled for the stablecoin/collateral pair associated
+    /// @notice Lets a HA close a perpetual owned or controlled for the stablecoin/collateral pair associated
     /// to this `PerpetualManager` contract
-    /// @param perpetualID ID of the perpetual to cash out
+    /// @param perpetualID ID of the perpetual to close
     /// @param to Address which will receive the proceeds from this perpetual
-    /// @param minCashOutAmount Minimum net cash out amount that the HA is willing to get for cashing out the
+    /// @param minCashOutAmount Minimum net cash out amount that the HA is willing to get for closing the
     /// perpetual
     /// @dev The HA gets the current amount of her position depending on the entry oracle value
     /// and current oracle value minus some transaction fees computed on the committed amount
-    /// @dev The `minCashOutAmount` serves as a protection for HAs cashing out their perpetuals: it protects them both
+    /// @dev `msg.sender` should be the owner of `perpetualID` or be approved for this perpetual
+    /// @dev If the `PoolManager` does not have enough collateral, the perpetual owner will be converted to a SLP and
+    /// receive sanTokens
+    /// @dev The `minCashOutAmount` serves as a protection for HAs closing their perpetuals: it protects them both
     /// from fees that would have become too high and from a too big decrease in oracle value
-    function cashOutPerpetual(uint256 perpetualID, address to, uint256 minCashOutAmount) external;
+    function closePerpetual(uint256 perpetualID, address to, uint256 minCashOutAmount) external;
 
     /// @notice Lets a HA increase the `margin` in a perpetual she controls for this
     /// stablecoin/collateral pair

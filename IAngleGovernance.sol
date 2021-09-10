@@ -89,7 +89,7 @@ interface IStableMaster{
     /// @notice Sets the x array (ie ratios between amount covered by HAs and amount to cover)
     /// and the y array (ie values of fees at thresholds) used to compute mint and burn fees for users
     /// @param poolManager Reference to the `PoolManager` handling the collateral
-    /// @param _xFee Thresholds of coverage ratios
+    /// @param _xFee Thresholds of hedge ratios
     /// @param _yFee Values of the fees at thresholds
     /// @param _mint Whether mint fees or burn fees should be updated
     function setUserFees(IPoolManager poolManager, uint64[] memory _xFee, uint64[] memory _yFee, uint8 _mint) external;
@@ -126,28 +126,28 @@ interface IPerpetualManager{
     function setHAFees(uint64[] memory _xHAFees, uint64[] memory _yHAFees, uint8 deposit) external;
 
     /// @notice Sets the target and limit proportions of collateral from users that can be insured by HAs
-    /// @param _targetHACoverage Proportion of collateral from users (in stablecoin value) that HAs should cover
-    /// @param _limitHACoverage Proportion of collateral from users (in stablecoin value) above which HAs can 
+    /// @param _targetHAHedge Proportion of collateral from users (in stablecoin value) that HAs should cover
+    /// @param _limitHAHedge Proportion of collateral from users (in stablecoin value) above which HAs can 
     /// see their perpetuals cashed out
-    function setTargetAndLimitHACoverage(uint64 _targetHACoverage, uint64 _limitHACoverage) external;
+    function setTargetAndLimitHAHedge(uint64 _targetHAHedge, uint64 _limitHAHedge) external;
 
     /// @notice Sets the proportion of fees going to the keepers when liquidating a HA perpetual
     /// @param _keeperFeesRatio Proportion to keepers
     /// @dev This proportion should be inferior to `BASE_PARAMS`
-    function setKeeperFeesRatio(uint64 _keeperFeesRatio) external;
+    function setKeeperFeesLiquidationRatio(uint64 _keeperFeesRatio) external;
 
     /// @notice Sets the maximum amounts going to the keepers when cashing out perpetuals
     /// because too much was covered by HAs or liquidating a perpetual
     /// @param _keeperFeesLiquidationCap Maximum reward going to the keeper liquidating a perpetual
-    /// @param _keeperFeesCashOutCap Maximum reward going to the keeper forcing the cash out of an ensemble
+    /// @param _keeperFeesCashOutCap Maximum reward going to the keeper forcing the closing of an ensemble
     /// of perpetuals
     function setKeeperFeesCap(uint256 _keeperFeesLiquidationCap, uint256 _keeperFeesCashOutCap) external;
 
     /// @notice Sets the x-array (ie thresholds) for `FeeManager` when cashing out perpetuals and the y-array that is the
     /// value of the proportions of the fees going to keepers cashing out perpetuals
-    /// @param _xKeeperFeesCashOut Thresholds for cash out fees
-    /// @param _yKeeperFeesCashOut Value of the fees at the different threshold values specified in `xKeeperFeesCashOut`
-    function setKeeperFeesCashOut(uint64[] memory _xKeeperFeesCashOut, uint64[] memory _yKeeperFeesCashOut) external;
+    /// @param _xKeeperFeesClosing Thresholds for closing fees going to keepers
+    /// @param _yKeeperFeesClosing Value of the fees at the different threshold values specified in `xKeeperFeesClosing`
+    function setKeeperFeesClosing(uint64[] memory _xKeeperFeesClosing, uint64[] memory _yKeeperFeesClosing) external;
 
     /// @notice Supports recovering LP Rewards from other systems
     /// @param tokenAddress Address of the token to transfer
