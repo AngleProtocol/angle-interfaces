@@ -139,9 +139,9 @@ interface IPerpetualManager{
     /// @notice Sets the maximum amounts going to the keepers when cashing out perpetuals
     /// because too much was covered by HAs or liquidating a perpetual
     /// @param _keeperFeesLiquidationCap Maximum reward going to the keeper liquidating a perpetual
-    /// @param _keeperFeesCashOutCap Maximum reward going to the keeper forcing the closing of an ensemble
+    /// @param _keeperFeesClosingCap Maximum reward going to the keeper forcing the closing of an ensemble
     /// of perpetuals
-    function setKeeperFeesCap(uint256 _keeperFeesLiquidationCap, uint256 _keeperFeesCashOutCap) external;
+    function setKeeperFeesCap(uint256 _keeperFeesLiquidationCap, uint256 _keeperFeesClosingCap) external;
 
     /// @notice Sets the x-array (ie thresholds) for `FeeManager` when cashing out perpetuals and the y-array that is the
     /// value of the proportions of the fees going to keepers cashing out perpetuals
