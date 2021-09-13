@@ -12,7 +12,11 @@ It is split in three different files:
 
 ## Protocol Architecture
 
+The smart contracts of the protocol are structured with the architecture below:
+
 ![Angle Protocol Smart Contract Architecture](./AngleArchitectureSchema.png)
+
+They will soon be made open-source.
 
 ## Further Information
 
