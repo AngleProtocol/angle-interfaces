@@ -13,3 +13,13 @@ It is split in three different files:
 ## Protocol Architecture
 
 ![Angle Protocol Smart Contract Architecture](./AngleArchitectureSchema.png)
+
+## Further Information
+
+For more info about the protocol:
+
+* [Docs](https://docs.angle.money)
+* [Twitter](https://twitter.com/AngleProtocol)
+* [Discord](https://discord.gg/9EKFec2MBm)
+
+
