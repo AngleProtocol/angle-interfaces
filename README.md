@@ -2,7 +2,7 @@
 
 ## Description
 
-This repo contains the interfaces for the contracts of Angle Protocol.
+This repo contains the interfaces for interacting with the core contracts of Angle Protocol.
 
 It is split in three different files:
 
