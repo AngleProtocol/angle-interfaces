@@ -468,7 +468,7 @@ interface IFeeManager {
 
 /// @notice Oracle contract, one contract is deployed per collateral/stablecoin pair
 /// @dev This contract concerns an oracle that only uses both Chainlink and Uniswap for multiple pools
-/// @dev For oracle contracts that use Uniswap, we can change the TWAP period
+/// @dev For oracle contracts that use Uniswap, governace can change the TWAP period
 interface IOracleMulti{
     /// @notice Changes the TWAP period
     /// @param _twapPeriod New window to compute the TWAP
